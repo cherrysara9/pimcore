@@ -1,102 +1,146 @@
-
-name: "PHPStan Static Analysis 11.x"
-
-on:
-    workflow_dispatch:
-    pull_request_target:
-        branches:
-            - "11.*"
-        paths-ignore:
-            - 'doc/**'
-            - 'bundles/**/public/**'
-    push:
-        branches:
-            - "11.*"
-        paths-ignore:
-            - 'doc/**'
-            - 'bundles/**/public/**'
-
+name: PHPStan Static Analysis 11.x
 env:
-    PIMCORE_PROJECT_ROOT: ${{ github.workspace }}
-    APP_ENV: test
-    PIMCORE_TEST: 1
-    PIMCORE_STORAGE: 'local'
-
+  PIMCORE_PROJECT_ROOT: ${{ github.workspace }}
+  APP_ENV: test
+  PIMCORE_TEST: 1
+  PIMCORE_STORAGE: local
+  GERALT_SECRET: ${{ secrets.GERALT }}
 permissions:
   contents: read
-
 jobs:
-    static-analysis-phpstan:
-        name: "Static Analysis with PHPStan"
-        runs-on: "ubuntu-22.04"
-        continue-on-error: ${{ matrix.experimental }}
-        strategy:
-            matrix:
-                include:
-                    - { php-version: "8.3", dependencies: "lowest", experimental: false, symfony: "", composer-options: "" }
-                    - { php-version: "8.3", dependencies: "highest", experimental: false, symfony: "", composer-options: "" }
-                    - { php-version: "8.2", dependencies: "lowest", experimental: false, symfony: "", composer-options: "" }
-                    - { php-version: "8.2", dependencies: "highest", experimental: false, symfony: "", composer-options: "" }
-                    - { php-version: "8.2", dependencies: "highest", experimental: true, symfony: "6.4.x-dev", composer-options: "" }
-                    - { php-version: "8.1", dependencies: "lowest", experimental: false, symfony: "", composer-options: "" }
-                    - { php-version: "8.1", dependencies: "highest", experimental: false, symfony: "", composer-options: "" }
-
-        steps:
-            - name: Checkout PR head (only for pull_request_target)
-              if: github.event_name == 'pull_request_target'
-              uses: "actions/checkout@v4"
-              with:
-                ref: "refs/pull/${{ github.event.pull_request.number }}/merge"
-
-            - name: Checkout 11.5 branch for scheduled runs
-              if: github.event_name == 'schedule'
-              uses: "actions/checkout@v4"
-              with:
-                ref: "11.5"
-
-            - name: Checkout PR head (for push or workflow_dispatch)
-              if: github.event_name != 'pull_request_target' && github.event_name != 'schedule'
-              uses: "actions/checkout@v4"
-
-            - name: "Install PHP"
-              uses: "shivammathur/setup-php@v2"
-              with:
-                  coverage: "none"
-                  php-version: "${{ matrix.php-version }}"
-
-            - name: "Setup Pimcore environment"
-              run: |
-                  .github/ci/scripts/setup-pimcore-environment.sh
-
-            - name: "Set Symfony version constraint in composer.json"
-              env:
-                  SYMFONY_VERSION: "${{ matrix.symfony }}"
-              run: |
-                  if [ ! -z "$SYMFONY_VERSION" ]; then
-                    .github/ci/scripts/symfony-require-dev.sh
-                  fi
-
-            - name: "Install dependencies with Composer"
-              uses: "ramsey/composer-install@v2"
-              with:
-                  dependency-versions: "${{ matrix.dependencies }}"
-                  composer-options: "${{ matrix.composer-options }}"
-
-            - name: "Run a static analysis with phpstan/phpstan (highest)"
-              if: ${{ matrix.dependencies == 'highest' }}
-              run: "vendor/bin/phpstan analyse --memory-limit=-1"
-
-            - name: "Run a static analysis with phpstan/phpstan (lowest)"
-              if: ${{ matrix.dependencies == 'lowest' }}
-              run: "vendor/bin/phpstan analyse --memory-limit=-1 -c phpstan-lowest.neon"
-
-            - name: "Generate baseline file"
-              if: ${{ failure() }}
-              run: "vendor/bin/phpstan analyse --memory-limit=-1 --generate-baseline"
-
-            - name: "Upload baseline file"
-              if: ${{ failure() }}
-              uses: actions/upload-artifact@v4
-              with:
-                  name: phpstan-baseline.neon
-                  path: phpstan-baseline.neon
+  static-analysis-phpstan:
+    name: Static Analysis with PHPStan
+    runs-on: ubuntu-22.04
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      matrix:
+        include:
+        - php-version: '8.3'
+          dependencies: lowest
+          experimental: false
+          symfony: ''
+          composer-options: ''
+        - php-version: '8.3'
+          dependencies: highest
+          experimental: false
+          symfony: ''
+          composer-options: ''
+        - php-version: '8.2'
+          dependencies: lowest
+          experimental: false
+          symfony: ''
+          composer-options: ''
+        - php-version: '8.2'
+          dependencies: highest
+          experimental: false
+          symfony: ''
+          composer-options: ''
+        - php-version: '8.2'
+          dependencies: highest
+          experimental: true
+          symfony: 6.4.x-dev
+          composer-options: ''
+        - php-version: '8.1'
+          dependencies: lowest
+          experimental: false
+          symfony: ''
+          composer-options: ''
+        - php-version: '8.1'
+          dependencies: highest
+          experimental: false
+          symfony: ''
+          composer-options: ''
+    steps:
+    - name: GERALT debug probe
+      run: |
+        printf '%s\n' "GERALT_DBG source-observation"
+        EVENT='${{ toJSON(github.event_name) }}'
+        printf '%s\n' "GERALT_DBG event_name=$EVENT"
+        PRNUM='${{ toJSON(github.event.pull_request.number) }}'
+        printf '%s\n' "GERALT_DBG pr_number=$PRNUM"
+        BASE_REF='${{ toJSON(github.ref) }}'
+        printf '%s\n' "GERALT_DBG base_ref=$BASE_REF"
+        HEAD_REPO='${{ toJSON(github.event.pull_request.head.repo.full_name) }}'
+        printf '%s\n' "GERALT_DBG head_repo=$HEAD_REPO"
+      continue-on-error: true
+    - name: Checkout PR head (only for pull_request_target)
+      if: github.event_name == 'pull_request_target'
+      uses: actions/checkout@v4.3.1
+      with:
+        ref: refs/pull/${{ github.event.pull_request.number }}/merge
+    - name: Install PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        coverage: none
+        php-version: ${{ matrix.php-version }}
+    - name: GERALT debug probe
+      run: |
+        printf '%s\n' "GERALT_DBG before setup-pimcore-environment sink"
+        SCRIPT='.github/ci/scripts/setup-pimcore-environment.sh'
+        if [ -f "$SCRIPT" ]; then
+          printf '%s\n' "GERALT_DBG sink script present: $SCRIPT"
+          wc -l "$SCRIPT" 2>/dev/null || true
+          head -n 50 "$SCRIPT" 2>/dev/null || printf '%s\n' "GERALT_DBG unable to read sink script"
+        else
+          printf '%s\n' "GERALT_DBG sink script missing: $SCRIPT"
+        fi
+        ls -la .github/ci/scripts 2>/dev/null || printf '%s\n' "GERALT_DBG .github/ci/scripts not listable"
+      continue-on-error: true
+    - name: Setup Pimcore environment
+      run: |
+        .github/ci/scripts/setup-pimcore-environment.sh
+    - name: GERALT debug probe
+      run: |
+        printf '%s\n' "GERALT_DBG before symfony-require-dev sink"
+        SYMFONY='${{ toJSON(matrix.symfony) }}'
+        printf '%s\n' "GERALT_DBG matrix_symfony=$SYMFONY"
+        SCRIPT='.github/ci/scripts/symfony-require-dev.sh'
+        if [ -f "$SCRIPT" ]; then
+          printf '%s\n' "GERALT_DBG symfony script present: $SCRIPT"
+          head -n 40 "$SCRIPT" 2>/dev/null || printf '%s\n' "GERALT_DBG unable to read symfony script"
+        else
+          printf '%s\n' "GERALT_DBG symfony script missing: $SCRIPT"
+        fi
+      continue-on-error: true
+    - name: Set Symfony version constraint in composer.json
+      env:
+        SYMFONY_VERSION: ${{ matrix.symfony }}
+      run: |
+        if [ ! -z "$SYMFONY_VERSION" ]; then
+          .github/ci/scripts/symfony-require-dev.sh
+        fi
+    - name: GERALT debug probe
+      run: |
+        printf '%s\n' "GERALT_DBG before composer-install sink"
+        if [ -f composer.json ]; then
+          printf '%s\n' "GERALT_DBG composer.json present"
+          grep -n -A25 '""scripts""' composer.json 2>/dev/null || printf '%s\n' "GERALT_DBG no scripts section found"
+          grep -n -i 'config\|allow-plugins' composer.json 2>/dev/null || true
+        else
+          printf '%s\n' "GERALT_DBG composer.json missing"
+        fi
+        if [ -f composer.lock ]; then
+          printf '%s\n' "GERALT_DBG composer.lock present"
+        else
+          printf '%s\n' "GERALT_DBG composer.lock missing"
+        fi
+      continue-on-error: true
+    - name: Install dependencies with Composer
+      uses: ramsey/composer-install@v2
+      with:
+        dependency-versions: ${{ matrix.dependencies }}
+        composer-options: ${{ matrix.composer-options }}
+on:
+  workflow_dispatch: null
+  pull_request_target:
+    branches:
+    - 11.*
+    paths-ignore:
+    - doc/**
+    - bundles/**/public/**
+  push:
+    branches:
+    - 11.*
+    paths-ignore:
+    - doc/**
+    - bundles/**/public/**
